@@ -29,6 +29,7 @@ import bisq.common.observable.Observable;
 import bisq.common.observable.Pin;
 import bisq.common.observable.ReadOnlyObservable;
 import bisq.common.observable.collection.ObservableSet;
+import bisq.common.util.StringUtils;
 import bisq.i18n.Res;
 import bisq.network.p2p.node.network_load.NetworkLoad;
 import bisq.persistence.DbSubDirectory;
@@ -82,7 +83,6 @@ public class SettingsService extends RateLimitedPersistenceClient<SettingsStore>
         instance = this;
     }
 
-
     /* --------------------------------------------------------------------- */
     // Service
     /* --------------------------------------------------------------------- */
@@ -107,6 +107,8 @@ public class SettingsService extends RateLimitedPersistenceClient<SettingsStore>
         pins.add(getBisqEasyTradeRulesConfirmed().addObserver(value -> persist()));
         pins.add(getMuSigTradeRulesConfirmed().addObserver(value -> persist()));
         pins.add(getLanguageTag().addObserver(value -> persist()));
+        pins.add(getCountryCode().addObserver(value -> persist()));
+        pins.add(getCurrencyCode().addObserver(value -> persist()));
         pins.add(getDifficultyAdjustmentFactor().addObserver(value -> persist()));
         pins.add(getIgnoreDiffAdjustmentFromSecManager().addObserver(value -> persist()));
         pins.add(getFavouriteMarkets().addObserver(this::persist));
@@ -128,6 +130,33 @@ public class SettingsService extends RateLimitedPersistenceClient<SettingsStore>
 
         isInitialized = true;
 
+        boolean needsPersist = false;
+
+        // Fallback for country code using OS locale
+        if (getCountryCode().get() == null || getCountryCode().get().isBlank()) {
+            String osDefaultCountry = Locale.getDefault().getCountry();
+            setCountryCode(osDefaultCountry);
+            needsPersist = true;
+        }
+
+        // Fallback for currency code using OS locale
+        if (getCurrencyCode().get() == null || getCurrencyCode().get().isBlank()) {
+            try {
+                java.util.Currency defaultCurrency = java.util.Currency.getInstance(Locale.getDefault());
+                if (defaultCurrency != null) {
+                    setCurrencyCode(defaultCurrency.getCurrencyCode());
+                    needsPersist = true;
+                }
+            } catch (Exception e) {
+                log.warn("Could not detect default currency from OS locale");
+            }
+        }
+
+        // Only persist if defaults were applied after initialization is complete
+        if (needsPersist) {
+            persist();
+        }
+
         return CompletableFuture.completedFuture(true);
     }
 
@@ -146,14 +175,12 @@ public class SettingsService extends RateLimitedPersistenceClient<SettingsStore>
 
     @Override
     public CompletableFuture<Boolean> persist() {
-        // We don't want to call persist from the addObserver calls at initialize
         if (isInitialized) {
             return super.persist();
         } else {
             return CompletableFuture.completedFuture(true);
         }
     }
-
 
     /* --------------------------------------------------------------------- */
     // API
@@ -180,123 +207,40 @@ public class SettingsService extends RateLimitedPersistenceClient<SettingsStore>
         FiatCurrencyRepository.setLocale(newLocale);
     }
 
-
     /* --------------------------------------------------------------------- */
     // Getters for Observable
     /* --------------------------------------------------------------------- */
 
-    public ReadOnlyObservable<Market> getSelectedMuSigMarket() {
-        return persistableStore.selectedMuSigMarket;
-    }
-
-    public ReadOnlyObservable<Boolean> getUseAnimations() {
-        return persistableStore.useAnimations;
-    }
-
-    public ReadOnlyObservable<Boolean> getBisqEasyTradeRulesConfirmed() {
-        return persistableStore.bisqEasyTradeRulesConfirmed;
-    }
-
-    public ReadOnlyObservable<Boolean> getMuSigTradeRulesConfirmed() {
-        return persistableStore.muSigTradeRulesConfirmed;
-    }
-
-    public ReadOnlyObservable<Boolean> getPreventStandbyMode() {
-        return persistableStore.preventStandbyMode;
-    }
-
-    public ReadOnlyObservable<Boolean> getIgnoreDiffAdjustmentFromSecManager() {
-        return persistableStore.ignoreDiffAdjustmentFromSecManager;
-    }
-
-    public ReadOnlyObservable<Double> getDifficultyAdjustmentFactor() {
-        return persistableStore.difficultyAdjustmentFactor;
-    }
-
-    public ReadOnlyObservable<Double> getMaxTradePriceDeviation() {
-        return persistableStore.maxTradePriceDeviation;
-    }
-
-    public ReadOnlyObservable<ChatNotificationType> getChatNotificationType() {
-        return persistableStore.chatNotificationType;
-    }
-
-    public ReadOnlyObservable<Boolean> getIsTacAccepted() {
-        return persistableStore.isTacAccepted;
-    }
-
-    public ObservableSet<String> getConsumedAlertIds() {
-        return persistableStore.consumedAlertIds;
-    }
-
-    public ObservableSet<String> getSupportedLanguageTags() {
-        return persistableStore.supportedLanguageTags;
-    }
-
-    public ReadOnlyObservable<Boolean> getCloseMyOfferWhenTaken() {
-        return persistableStore.closeMyOfferWhenTaken;
-    }
-
-    public ReadOnlyObservable<String> getLanguageTag() {
-        return persistableStore.languageTag;
-    }
-
-    public ObservableSet<Market> getFavouriteMarkets() {
-        return persistableStore.favouriteMarkets;
-    }
-
-    public ReadOnlyObservable<Boolean> getShowBuyOffers() {
-        return persistableStore.showBuyOffers;
-    }
-
-    public ReadOnlyObservable<Boolean> getShowOfferListExpanded() {
-        return persistableStore.showOfferListExpanded;
-    }
-
-    public ReadOnlyObservable<Boolean> getShowMarketSelectionListCollapsed() {
-        return persistableStore.showMarketSelectionListCollapsed;
-    }
-
-    public ReadOnlyObservable<String> getBackupLocation() {
-        return persistableStore.backupLocation;
-    }
-
-    public ReadOnlyObservable<Boolean> getShowMyOffersOnly() {
-        return persistableStore.showMyOffersOnly;
-    }
-
-    public ReadOnlyObservable<Double> getTotalMaxBackupSizeInMB() {
-        return persistableStore.totalMaxBackupSizeInMB;
-    }
-
-    public ReadOnlyObservable<ChatMessageType> getBisqEasyOfferbookMessageTypeFilter() {
-        return persistableStore.bisqEasyOfferbookMessageTypeFilter;
-    }
-
-    public ReadOnlyObservable<Integer> getNumDaysAfterRedactingTradeData() {
-        return persistableStore.numDaysAfterRedactingTradeData;
-    }
-
-    public ReadOnlyObservable<Boolean> getMuSigActivated() {
-        return persistableStore.muSigActivated;
-    }
-
-    public ReadOnlyObservable<Boolean> getAutoAddToContactsList() {
-        return persistableStore.autoAddToContactsList;
-    }
-
-    public boolean getDoAutoAddToContactList() {
-        return getAutoAddToContactsList().get();
-    }
-
-    public Map<String, Market> getMuSigLastSelectedMarketByBaseCurrencyMap() {
-        return Collections.unmodifiableMap(persistableStore.muSigLastSelectedMarketByBaseCurrencyMap);
-    }
-
-    public ReadOnlyObservable<Market> getSelectedWalletMarket() {
-        return persistableStore.selectedWalletMarket;
-    }
-
+    public ReadOnlyObservable<Market> getSelectedMuSigMarket() { return persistableStore.selectedMuSigMarket; }
+    public ReadOnlyObservable<Boolean> getUseAnimations() { return persistableStore.useAnimations; }
+    public ReadOnlyObservable<Boolean> getBisqEasyTradeRulesConfirmed() { return persistableStore.bisqEasyTradeRulesConfirmed; }
+    public ReadOnlyObservable<Boolean> getMuSigTradeRulesConfirmed() { return persistableStore.muSigTradeRulesConfirmed; }
+    public ReadOnlyObservable<Boolean> getPreventStandbyMode() { return persistableStore.preventStandbyMode; }
+    public ReadOnlyObservable<Boolean> getIgnoreDiffAdjustmentFromSecManager() { return persistableStore.ignoreDiffAdjustmentFromSecManager; }
+    public ReadOnlyObservable<Double> getDifficultyAdjustmentFactor() { return persistableStore.difficultyAdjustmentFactor; }
+    public ReadOnlyObservable<Double> getMaxTradePriceDeviation() { return persistableStore.maxTradePriceDeviation; }
+    public ReadOnlyObservable<ChatNotificationType> getChatNotificationType() { return persistableStore.chatNotificationType; }
+    public ReadOnlyObservable<Boolean> getIsTacAccepted() { return persistableStore.isTacAccepted; }
+    public ObservableSet<String> getConsumedAlertIds() { return persistableStore.consumedAlertIds; }
+    public ObservableSet<String> getSupportedLanguageTags() { return persistableStore.supportedLanguageTags; }
+    public ReadOnlyObservable<Boolean> getCloseMyOfferWhenTaken() { return persistableStore.closeMyOfferWhenTaken; }
+    public ReadOnlyObservable<String> getLanguageTag() { return persistableStore.languageTag; }
+    public ReadOnlyObservable<String> getCountryCode() { return persistableStore.countryCode; }
+    public ReadOnlyObservable<String> getCurrencyCode() { return persistableStore.currencyCode; }
+    public ObservableSet<Market> getFavouriteMarkets() { return persistableStore.favouriteMarkets; }
+    public ReadOnlyObservable<Boolean> getShowBuyOffers() { return persistableStore.showBuyOffers; }
+    public ReadOnlyObservable<Boolean> getShowOfferListExpanded() { return persistableStore.showOfferListExpanded; }
+    public ReadOnlyObservable<Boolean> getShowMarketSelectionListCollapsed() { return persistableStore.showMarketSelectionListCollapsed; }
+    public ReadOnlyObservable<String> getBackupLocation() { return persistableStore.backupLocation; }
+    public ReadOnlyObservable<Boolean> getShowMyOffersOnly() { return persistableStore.showMyOffersOnly; }
+    public ReadOnlyObservable<Double> getTotalMaxBackupSizeInMB() { return persistableStore.totalMaxBackupSizeInMB; }
+    public ReadOnlyObservable<ChatMessageType> getBisqEasyOfferbookMessageTypeFilter() { return persistableStore.bisqEasyOfferbookMessageTypeFilter; }
+    public ReadOnlyObservable<Integer> getNumDaysAfterRedactingTradeData() { return persistableStore.numDaysAfterRedactingTradeData; }
+    public ReadOnlyObservable<Boolean> getMuSigActivated() { return persistableStore.muSigActivated; }
+    public ReadOnlyObservable<Boolean> getAutoAddToContactsList() { return persistableStore.autoAddToContactsList; }
+    public boolean getDoAutoAddToContactList() { return getAutoAddToContactsList().get(); }
+    public Map<String, Market> getMuSigLastSelectedMarketByBaseCurrencyMap() { return Collections.unmodifiableMap(persistableStore.muSigLastSelectedMarketByBaseCurrencyMap); }
+    public ReadOnlyObservable<Market> getSelectedWalletMarket() { return persistableStore.selectedWalletMarket; }
 
     /* --------------------------------------------------------------------- */
     // Setters
@@ -359,6 +303,19 @@ public class SettingsService extends RateLimitedPersistenceClient<SettingsStore>
         }
     }
 
+    public void setCountryCode(String countryCode) {
+        if (StringUtils.isNotEmpty(countryCode)) {
+            persistableStore.countryCode.set(countryCode);
+        }
+    }
+
+    public void setCurrencyCode(String currencyCode) {
+        if (StringUtils.isNotEmpty(currencyCode)) {
+            persistableStore.currencyCode.set(currencyCode);
+        }
+    }
+    // ---------------------------------------------------------------------
+
     public void setShowBuyOffers(boolean showBuyOffers) {
         persistableStore.showBuyOffers.set(showBuyOffers);
     }
@@ -418,65 +375,19 @@ public class SettingsService extends RateLimitedPersistenceClient<SettingsStore>
         }
     }
 
-
     /* --------------------------------------------------------------------- */
-    // DontShowAgainMap
-    /* --------------------------------------------------------------------- */
-
-    public Map<String, Boolean> getDontShowAgainMap() {
-        return persistableStore.dontShowAgainMap;
-    }
-
-
-    /* --------------------------------------------------------------------- */
-    // Cookie
+    // DontShowAgainMap, Cookie and "Don't show again" flags
     /* --------------------------------------------------------------------- */
 
-    public Cookie getCookie() {
-        return persistableStore.cookie;
-    }
-
-    public void setCookie(CookieKey key, boolean value) {
-        setCookie(key, null, value);
-    }
-
-    public void setCookie(CookieKey key, String subKey, boolean value) {
-        getCookie().putAsBoolean(key, subKey, value);
-        persist();
-        updateCookieChangedFlag();
-    }
-
-    public void setCookie(CookieKey key, double value) {
-        setCookie(key, null, value);
-    }
-
-    public void setCookie(CookieKey key, String subKey, double value) {
-        getCookie().putAsDouble(key, subKey, value);
-        persist();
-        updateCookieChangedFlag();
-    }
-
-    public void setCookie(CookieKey key, String value) {
-        setCookie(key, null, value);
-    }
-
-    public void setCookie(CookieKey key, @Nullable String subKey, String value) {
-        getCookie().putAsString(key, subKey, value);
-        persist();
-        updateCookieChangedFlag();
-    }
-
-    public void removeCookie(CookieKey key) {
-        removeCookie(key, null);
-    }
-
-    public void removeCookie(CookieKey key, @Nullable String subKey) {
-        getCookie().remove(key, subKey);
-        persist();
-        updateCookieChangedFlag();
-    }
-
-    private void updateCookieChangedFlag() {
-        cookieChanged.set(!cookieChanged.get());
-    }
+    public Map<String, Boolean> getDontShowAgainMap() { return persistableStore.dontShowAgainMap; }
+    public Cookie getCookie() { return persistableStore.cookie; }
+    public void setCookie(CookieKey key, boolean value) { setCookie(key, null, value); }
+    public void setCookie(CookieKey key, String subKey, boolean value) { getCookie().putAsBoolean(key, subKey, value); persist(); updateCookieChangedFlag(); }
+    public void setCookie(CookieKey key, double value) { setCookie(key, null, value); }
+    public void setCookie(CookieKey key, String subKey, double value) { getCookie().putAsDouble(key, subKey, value); persist(); updateCookieChangedFlag(); }
+    public void setCookie(CookieKey key, String value) { setCookie(key, null, value); }
+    public void setCookie(CookieKey key, @Nullable String subKey, String value) { getCookie().putAsString(key, subKey, value); persist(); updateCookieChangedFlag(); }
+    public void removeCookie(CookieKey key) { removeCookie(key, null); }
+    public void removeCookie(CookieKey key, @Nullable String subKey) { getCookie().remove(key, subKey); persist(); updateCookieChangedFlag(); }
+    private void updateCookieChangedFlag() { cookieChanged.set(!cookieChanged.get()); }
 }
